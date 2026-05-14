@@ -14,6 +14,18 @@ const signToken = (user) =>
 export const register = asyncHandler(async (req, res) => {
   const { name, email, password, role = 'caretaker' } = req.body;
 
+  // Input validation
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Name, email, and password are required.' });
+  }
+  const ALLOWED_ROLES = ['doctor', 'patient', 'caretaker', 'admin'];
+  if (!ALLOWED_ROLES.includes(role)) {
+    return res.status(400).json({ error: `Invalid role. Must be one of: ${ALLOWED_ROLES.join(', ')}` });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+
   if (!supabase) return res.status(503).json({ error: 'Database unavailable' });
 
   const { data: existing } = await supabase
@@ -35,6 +47,7 @@ export const register = asyncHandler(async (req, res) => {
 
   res.status(201).json({ token: signToken(user), user });
 });
+
 
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
