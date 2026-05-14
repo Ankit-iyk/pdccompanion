@@ -1,49 +1,79 @@
 import { supabase } from '../config/supabase.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
+
+// ── Alert cooldown map ──────────────────────────────────────────────────────
+// Prevents alert storms: same alert type per patient limited to once per 60s
+const cooldowns = new Map(); // key: `${patientId}:${type}` → timestamp
+
+function isOnCooldown(patientId, type, cooldownMs = 60_000) {
+  const key = `${patientId}:${type}`;
+  const last = cooldowns.get(key) || 0;
+  if (Date.now() - last < cooldownMs) return true;
+  cooldowns.set(key, Date.now());
+  return false;
+}
 
 export const createAlert = async (alertData) => {
   if (!supabase) return null;
-  const { data, error } = await supabase.from('pd_alerts').insert(alertData).select().single();
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from('pd_alerts')
+      .insert(alertData)
+      .select()
+      .single();
+    if (error) { console.error('[Alert] DB insert error:', error.message); return null; }
+    return data;
+  } catch (err) {
+    console.error('[Alert] createAlert failed:', err.message);
+    return null;
+  }
 };
 
 // Auto-triggered alert based on telemetry thresholds
+// Safe to call on every tick — cooldown map prevents spamming
 export const checkTelemetryAlerts = async (telemetry, io) => {
-  if (!supabase) return;
   const { patient_id, heart_rate, tremor_score, fall_detected } = telemetry;
 
-  if (fall_detected) {
+  if (fall_detected && !isOnCooldown(patient_id, 'FALL', 30_000)) {
     const alert = await createAlert({
       patient_id,
-      type: 'FALL',
+      type:     'FALL',
       severity: 'critical',
-      message: `Fall detected for patient ${patient_id}. Immediate assistance required.`,
+      message:  `Fall detected near bedroom. Immediate assistance required.`,
       resolved: false,
     });
-    io?.emit('new_alert', alert);
-    io?.emit('sos_alert', { patientId: patient_id, alert });
+    if (alert) {
+      io?.to('monitoring').emit('new_alert', alert);
+      io?.to(`patient:${patient_id}`).emit('new_alert', alert);
+      io?.emit('sos_alert', { patientId: patient_id, alert });
+      console.log(`🚨 [Alert] FALL detected for ${patient_id}`);
+    }
   }
 
-  if (heart_rate > 130) {
+  if (heart_rate > 130 && !isOnCooldown(patient_id, 'HR')) {
     const alert = await createAlert({
       patient_id,
-      type: 'HR',
+      type:     'HR',
       severity: 'high',
-      message: `Heart rate critically elevated: ${heart_rate} bpm for patient ${patient_id}.`,
+      message:  `Heart rate critically elevated at ${Math.round(heart_rate)} bpm.`,
       resolved: false,
     });
-    io?.emit('new_alert', alert);
+    if (alert) {
+      io?.to('monitoring').emit('new_alert', alert);
+      io?.to(`patient:${patient_id}`).emit('new_alert', alert);
+    }
   }
 
-  if (tremor_score > 0.85) {
+  if (tremor_score > 0.85 && !isOnCooldown(patient_id, 'TREMOR')) {
     const alert = await createAlert({
       patient_id,
-      type: 'TREMOR',
+      type:     'TREMOR',
       severity: 'high',
-      message: `Severe tremor detected (score: ${tremor_score}) for patient ${patient_id}.`,
+      message:  `Severe tremor activity detected (score: ${tremor_score.toFixed(2)}).`,
       resolved: false,
     });
-    io?.emit('new_alert', alert);
+    if (alert) {
+      io?.to('monitoring').emit('new_alert', alert);
+      io?.to(`patient:${patient_id}`).emit('new_alert', alert);
+    }
   }
 };

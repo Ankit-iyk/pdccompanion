@@ -51,6 +51,11 @@ body {
 .badge-medium   { @apply badge bg-yellow-500/20 text-yellow-400 border border-yellow-500/30; }
 .badge-low      { @apply badge bg-blue-500/20   text-blue-400   border border-blue-500/30; }
 
+/* ── Patient status badges ──────────────────────── */
+.status-stable   { @apply badge bg-green-500/20  text-green-400  border border-green-500/30; }
+.status-warning  { @apply badge bg-yellow-500/20 text-yellow-400 border border-yellow-500/30; }
+.status-critical { @apply badge bg-red-500/20    text-red-400    border border-red-500/30; }
+
 /* ── Pulsing SOS ring ───────────────────────────── */
 .sos-ring {
   animation: sos-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -58,6 +63,40 @@ body {
 @keyframes sos-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.7); }
   50%       { box-shadow: 0 0 0 12px rgba(239,68,68,0); }
+}
+
+/* ── Heartbeat dot ───────────────────────────────── */
+.live-dot {
+  @apply w-2 h-2 rounded-full bg-green-400;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
+/* ── Skeleton loader ────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.05) 0%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.05) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Page fade-in ───────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out both;
 }
 
 /* ── Chart tooltips ─────────────────────────────── */
@@ -73,6 +112,3 @@ body {
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: rgba(255,255,255,0.12); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-
-/* ── Page transitions ───────────────────────────── */
-.page-enter { @apply animate-fade-in; }

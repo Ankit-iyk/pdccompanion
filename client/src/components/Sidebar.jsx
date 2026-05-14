@@ -18,7 +18,7 @@ const NAV = [
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout }          = useAuth();
-  const { connected }             = useSocket() || {};
+  const { connected, reconnecting } = useSocket() || {};
   const { unresolved }            = useAlerts();
   const navigate                  = useNavigate();
 
@@ -46,8 +46,10 @@ export default function Sidebar() {
       {!collapsed && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5">
           {connected
-            ? <><Wifi className="w-3 h-3 text-green-400" /><span className="text-xs text-green-400">Live</span></>
-            : <><WifiOff className="w-3 h-3 text-slate-500" /><span className="text-xs text-slate-500">Connecting…</span></>}
+        ? <><span className="live-dot" /><span className="text-xs text-green-400">Live</span></>
+        : reconnecting
+          ? <><span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" /><span className="text-xs text-amber-400">Reconnecting…</span></>
+          : <><WifiOff className="w-3 h-3 text-slate-500" /><span className="text-xs text-slate-500">Offline</span></>}
         </div>
       )}
 

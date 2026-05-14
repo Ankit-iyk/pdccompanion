@@ -1,12 +1,41 @@
 import { useNavigate } from 'react-router-dom';
-import { Activity, Heart, Cpu, BatteryLow, AlertCircle } from 'lucide-react';
+import { Heart, Activity, AlertCircle, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
-const stageColors = ['', 'text-green-400', 'text-yellow-400', 'text-orange-400', 'text-red-400', 'text-red-600'];
 const stageLabels = ['', 'Stage I', 'Stage II', 'Stage III', 'Stage IV', 'Stage V'];
+const stageColors = ['', 'text-green-400', 'text-yellow-400', 'text-orange-400', 'text-red-400', 'text-red-600'];
+
+// Derive patient status from live telemetry
+function getPatientStatus(telemetry) {
+  if (!telemetry) return null;
+  if (telemetry.fall_detected)       return { label: 'Critical', cls: 'status-critical' };
+  if (telemetry.heart_rate > 130)    return { label: 'Critical', cls: 'status-critical' };
+  if (telemetry.tremor_score > 0.75) return { label: 'Warning',  cls: 'status-warning' };
+  if (telemetry.heart_rate > 110)    return { label: 'Warning',  cls: 'status-warning' };
+  return { label: 'Stable', cls: 'status-stable' };
+}
+
+// "Updated X sec ago"
+function useLastUpdated(telemetry) {
+  const [label, setLabel] = useState('');
+  useEffect(() => {
+    if (!telemetry?.created_at) return;
+    const update = () => {
+      const secs = Math.round((Date.now() - new Date(telemetry.created_at)) / 1000);
+      setLabel(secs < 5 ? 'just now' : `${secs}s ago`);
+    };
+    update();
+    const t = setInterval(update, 2000);
+    return () => clearInterval(t);
+  }, [telemetry?.created_at]);
+  return label;
+}
 
 export default function PatientCard({ patient, telemetry }) {
-  const navigate = useNavigate();
-  const hasFall = telemetry?.fall_detected;
+  const navigate  = useNavigate();
+  const hasFall   = telemetry?.fall_detected;
+  const status    = getPatientStatus(telemetry);
+  const lastUpdated = useLastUpdated(telemetry);
 
   return (
     <div
@@ -23,9 +52,12 @@ export default function PatientCard({ patient, telemetry }) {
           <p className="font-semibold text-white text-sm truncate">{patient.name}</p>
           <p className="text-xs text-slate-500">Age {patient.age} · {stageLabels[patient.diagnosis_stage] || 'Unknown'}</p>
         </div>
-        <span className={`text-xs font-semibold ${stageColors[patient.diagnosis_stage] || 'text-slate-400'}`}>
-          {stageLabels[patient.diagnosis_stage] || '—'}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`text-xs font-semibold ${stageColors[patient.diagnosis_stage] || 'text-slate-400'}`}>
+            {stageLabels[patient.diagnosis_stage] || '—'}
+          </span>
+          {status && <span className={status.cls}>{status.label}</span>}
+        </div>
       </div>
 
       {/* Live Vitals */}
@@ -33,7 +65,7 @@ export default function PatientCard({ patient, telemetry }) {
         <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
           <Heart className="w-3.5 h-3.5 text-red-400 shrink-0" />
           <span className="text-xs text-slate-300">
-            {telemetry?.heart_rate ? `${telemetry.heart_rate} bpm` : '— bpm'}
+            {telemetry?.heart_rate ? `${Math.round(telemetry.heart_rate)} bpm` : '— bpm'}
           </span>
         </div>
         <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
@@ -52,8 +84,16 @@ export default function PatientCard({ patient, telemetry }) {
         </div>
       )}
 
-      {/* Patient ID */}
-      <p className="text-xs text-slate-600 mt-3 font-mono">{patient.id}</p>
+      {/* Footer: Patient ID + last updated */}
+      <div className="flex items-center justify-between mt-3">
+        <p className="text-xs text-slate-600 font-mono">{patient.id}</p>
+        {lastUpdated && telemetry && (
+          <div className="flex items-center gap-1 text-xs text-slate-600">
+            <Clock className="w-3 h-3" />
+            {lastUpdated}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

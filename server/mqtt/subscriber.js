@@ -2,8 +2,7 @@
 // Disabled when MQTT_BROKER_URL is not set in .env
 import mqtt from 'mqtt';
 import { config } from '../config/env.js';
-import { supabase } from '../config/supabase.js';
-import { checkTelemetryAlerts } from '../services/alertService.js';
+import { processTelemetry } from '../services/mockSimulator.js';
 
 export function initMQTT(io) {
   if (!config.mqtt.brokerUrl) {
@@ -14,6 +13,8 @@ export function initMQTT(io) {
   const client = mqtt.connect(config.mqtt.brokerUrl, {
     username: config.mqtt.username,
     password: config.mqtt.password,
+    reconnectPeriod: 5000,
+    connectTimeout: 10_000,
   });
 
   client.on('connect', () => {
@@ -26,33 +27,43 @@ export function initMQTT(io) {
 
   client.on('message', async (topic, payload) => {
     try {
-      const data = JSON.parse(payload.toString());
-      const telemetry = {
-        patient_id:   data.patientId,
-        heart_rate:   data.heartRate,
-        tremor_score: data.tremorScore,
-        temperature:  data.temperature,
-        fall_detected:data.fallDetected ?? false,
-        latitude:     data.latitude ?? null,
-        longitude:    data.longitude ?? null,
-        created_at:   new Date().toISOString(),
-      };
+      // Guard: malformed payloads must not crash the server
+      const raw = payload.toString();
+      if (!raw || raw.length > 4096) {
+        console.warn('[MQTT] Payload rejected: empty or too large');
+        return;
+      }
+      const data = JSON.parse(raw);
 
-      // Save to DB
-      if (supabase) {
-        await supabase.from('pd_telemetry').insert(telemetry);
+      // Validate required fields before processing
+      if (!data.patientId) {
+        console.warn('[MQTT] Payload missing patientId — discarded');
+        return;
       }
 
-      // Broadcast via Socket.IO
-      io.to(`patient:${telemetry.patient_id}`).emit('telemetry', telemetry);
-      io.to('monitoring').emit('telemetry', telemetry);
+      const telemetry = {
+        patient_id:    data.patientId,
+        heart_rate:    Number(data.heartRate) || 0,
+        tremor_score:  Number(data.tremorScore) || 0,
+        temperature:   Number(data.temperature) || 0,
+        fall_detected: Boolean(data.fallDetected ?? false),
+        latitude:      data.latitude ?? null,
+        longitude:     data.longitude ?? null,
+        created_at:    new Date().toISOString(),
+        source:        'mqtt',
+        battery_level: data.batteryLevel ?? null,
+      };
 
-      // Threshold alerts
-      await checkTelemetryAlerts(telemetry, io);
+      // Use the same unified pipeline as the simulator
+      await processTelemetry(telemetry, io);
+
     } catch (err) {
-      console.error('[MQTT] Message parse error:', err.message);
+      // Never let a bad MQTT message crash the server
+      console.error('[MQTT] Message parse error (discarded):', err.message);
     }
   });
 
   client.on('error', (err) => console.error('[MQTT] Error:', err.message));
+  client.on('reconnect', () => console.log('[MQTT] Reconnecting…'));
+  client.on('offline', () => console.warn('[MQTT] Client offline'));
 }

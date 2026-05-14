@@ -19,9 +19,9 @@ function generateTick(patientId) {
   const s = state[patientId];
   s.hr     = walk(s.hr,     3,    50,  150);
   s.tremor = walk(s.tremor, 0.06, 0,   1);
-  s.temp   = walk(s.temp,   0.1,  35.5,38.5);
+  s.temp   = walk(s.temp,   0.1,  35.5, 38.5);
 
-  // 1% chance of fall each tick (~every 3 min at 2s intervals)
+  // ~1% chance of fall per tick (~every 3 min at 2s intervals)
   const fall_detected = Math.random() < 0.01;
 
   return {
@@ -33,7 +33,22 @@ function generateTick(patientId) {
     latitude:      round(s.lat + (Math.random() - 0.5) * 0.001, 6),
     longitude:     round(s.lng + (Math.random() - 0.5) * 0.001, 6),
     created_at:    new Date().toISOString(),
+    source:        'simulator', // hardware compatibility tag
   };
+}
+
+// ── Unified telemetry pipeline ──────────────────────────────────────────────
+// All telemetry (simulator OR MQTT) flows through this function.
+// This is the single integration point for the hardware team.
+export async function processTelemetry(data, io) {
+  // 1. Broadcast via Socket.IO
+  io.to(`patient:${data.patient_id}`).emit('telemetry', data);
+  io.to('monitoring').emit('telemetry', data);
+
+  // 2. Check thresholds → auto-generate alerts
+  if (data.fall_detected || data.heart_rate > 130 || data.tremor_score > 0.85) {
+    await checkTelemetryAlerts(data, io);
+  }
 }
 
 async function saveToDB(data) {
@@ -45,28 +60,50 @@ async function saveToDB(data) {
   }
 }
 
+// ── Simulator (interval ref stored for cleanup) ─────────────────────────────
+let _intervalRef = null;
+
 export function startMockSimulator(io) {
+  // Prevent double-interval on hot-reload (node --watch)
+  if (_intervalRef) {
+    clearInterval(_intervalRef);
+    _intervalRef = null;
+  }
+
   console.log('🤖 [Simulator] Starting for patients:', PATIENTS.join(', '));
 
-  setInterval(async () => {
+  _intervalRef = setInterval(async () => {
     for (const patientId of PATIENTS) {
       const data = generateTick(patientId);
       state[patientId].tick++;
 
-      // Emit to patient-specific room
-      io.to(`patient:${patientId}`).emit('telemetry', data);
-      // Emit to global monitoring room (dashboard)
-      io.to('monitoring').emit('telemetry', data);
+      await processTelemetry(data, io);
 
-      // Handle threshold alerts
-      if (data.fall_detected || data.heart_rate > 130 || data.tremor_score > 0.85) {
-        await checkTelemetryAlerts(data, io);
-      }
-
-      // Persist to DB every 5 ticks (10s) or on any event
+      // Persist to DB every 5 ticks (10s) or on a fall event
       if (state[patientId].tick % 5 === 0 || data.fall_detected) {
         await saveToDB(data);
       }
     }
   }, config.simulator.intervalMs);
+}
+
+export function stopMockSimulator() {
+  if (_intervalRef) {
+    clearInterval(_intervalRef);
+    _intervalRef = null;
+    console.log('🤖 [Simulator] Stopped.');
+  }
+}
+
+// Trigger a one-off manual fall event for demo purposes
+export function triggerDemoFall(io, patientId = 'PD001') {
+  const data = {
+    ...generateTick(patientId),
+    fall_detected: true,
+    source: 'demo_trigger',
+  };
+  processTelemetry(data, io);
+  saveToDB(data);
+  console.log(`🚨 [Demo] Manual fall triggered for ${patientId}`);
+  return data;
 }
