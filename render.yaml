@@ -1,0 +1,29 @@
+# Render deployment config
+# This file tells Render how to deploy the PDCompanion backend
+
+services:
+  - type: web
+    name: pdcompanion-api
+    env: node
+    region: singapore
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        fromPort: true
+      - key: JWT_SECRET
+        sync: false          # set manually in Render dashboard
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CLIENT_URL
+        sync: false          # set to your Vercel frontend URL
+      - key: ENABLE_SIMULATOR
+        value: "true"
+      - key: SIMULATOR_INTERVAL_MS
+        value: "2000"

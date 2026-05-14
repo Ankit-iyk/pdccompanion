@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Bell, CheckCircle, Filter } from 'lucide-react';
 import { useAlerts } from '../hooks/useAlerts.js';
-import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { AlertsSkeleton } from '../components/Skeletons.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import toast from 'react-hot-toast';
 
@@ -77,7 +77,7 @@ export default function AlertsPage() {
 
       {/* Alert list */}
       {loading ? (
-        <LoadingSpinner className="py-20" />
+        <AlertsSkeleton />
       ) : displayed.length === 0 ? (
         <EmptyState icon={Bell} title="No alerts" message="All clear! No alerts match your current filter." />
       ) : (

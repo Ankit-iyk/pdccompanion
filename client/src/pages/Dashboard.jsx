@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DashboardSkeleton } from '../components/Skeletons.jsx';
 import { Users, Bell, Heart, AlertTriangle, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { usePatients } from '../hooks/usePatients.js';
@@ -81,6 +82,8 @@ export default function Dashboard() {
   const fallsToday = alerts.filter(
     (a) => a.type === 'FALL' && new Date(a.created_at) > new Date(Date.now() - 86400000)
   ).length;
+
+  if (loading) return <DashboardSkeleton />;
 
   return (
     <div className="space-y-6 animate-fade-in">

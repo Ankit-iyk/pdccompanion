@@ -5,7 +5,7 @@ import { usePatientTelemetry } from '../hooks/useTelemetry.js';
 import { useAlerts } from '../hooks/useAlerts.js';
 import TelemetryChart from '../components/TelemetryChart.jsx';
 import DeviceStatus from '../components/DeviceStatus.jsx';
-import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { PatientDetailSkeleton } from '../components/Skeletons.jsx';
 
 const MOCK_DEVICES = [
   { device_type: 'cap',      battery_level: 87, status: 'online',  firmware_version: '2.1.0' },
@@ -28,7 +28,7 @@ export default function PatientDetailsPage() {
     { label: 'Location',   value: current?.latitude ? 'Tracked' : 'Awaiting', icon: MapPin, color: 'text-green-400' },
   ];
 
-  if (loading) return <LoadingSpinner className="py-32" size="lg" />;
+  if (loading) return <PatientDetailSkeleton />;
 
   return (
     <div className="space-y-6 animate-fade-in">
