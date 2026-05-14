@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Bell, CheckCircle, Filter } from 'lucide-react';
+import { useAuth } from '../context/AuthContext.jsx';
+import { usePatients } from '../hooks/usePatients.js';
 import { useAlerts } from '../hooks/useAlerts.js';
 import { AlertsSkeleton } from '../components/Skeletons.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -10,7 +12,15 @@ const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 export default function AlertsPage() {
   const [filter, setFilter]   = useState('all');
   const [showResolved, setShowResolved] = useState(false);
-  const { alerts, loading, resolve } = useAlerts();
+  const { user }              = useAuth();
+  const { patients }          = usePatients();
+
+  // Patients see only their own alerts; doctors/caretakers see all
+  const patientId = user?.role === 'patient'
+    ? (patients.find((p) => p.user_id === user.id)?.id || 'PD001')
+    : 'all';
+
+  const { alerts, loading, resolve } = useAlerts(patientId);
 
   const handleResolve = async (id) => {
     await resolve(id);
@@ -34,9 +44,12 @@ export default function AlertsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-white">Alerts</h1>
+        <h1 className="text-2xl font-bold text-white">
+          {user?.role === 'patient' ? 'My Alerts' : 'Alerts'}
+        </h1>
         <p className="text-slate-500 text-sm mt-1">
-          {alerts.filter((a) => !a.resolved).length} active alerts across all patients
+          {alerts.filter((a) => !a.resolved).length} active {user?.role === 'patient' ? 'personal ' : ''}alerts
+          {user?.role !== 'patient' && ' · system-wide'}
         </p>
       </div>
 
